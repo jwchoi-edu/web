@@ -1,62 +1,135 @@
 import streamlit as st
-import folium
-from streamlit_folium import st_folium
+import matplotlib.pyplot as plt
+import numpy as np
+import random
+import time
 
-# 여행지 데이터
-destinations = [
-    {
-        "name": "파리 (Paris)",
-        "lat": 48.8566,
-        "lon": 2.3522,
-        "description": "에펠탑, 루브르 박물관, 샹젤리제 거리 등으로 유명한 프랑스의 수도입니다."
-    },
-    {
-        "name": "니스 (Nice)",
-        "lat": 43.7102,
-        "lon": 7.2620,
-        "description": "지중해 해안의 휴양 도시로, 아름다운 해변과 고급 리조트로 유명합니다."
-    },
-    {
-        "name": "리옹 (Lyon)",
-        "lat": 45.7640,
-        "lon": 4.8357,
-        "description": "미식의 도시로 불리며, 유네스코 세계유산에 등재된 구시가지가 있습니다."
-    },
-    {
-        "name": "보르도 (Bordeaux)",
-        "lat": 44.8378,
-        "lon": -0.5792,
-        "description": "와인으로 유명한 도시로, 프랑스 와인 여행의 중심지입니다."
-    },
-    {
-        "name": "몽생미셸 (Mont Saint-Michel)",
-        "lat": 48.6361,
-        "lon": -1.5115,
-        "description": "바다 위에 떠 있는 수도원 섬으로 환상적인 풍경을 자랑합니다."
-    }
-]
 
-st.title("🇫🇷 프랑스 여행 가이드")
-st.write("아래에서 프랑스의 주요 관광지를 확인하고 지도에서 위치를 확인해보세요!")
+# ----------- 시각화 함수 (렌더용 / 정렬용 구분) -----------
+def render_array(arr, highlight_indices=None, delay=0.0):
+    st.empty()
+    fig, ax = plt.subplots()
+    bar_rects = ax.bar(range(len(arr)), arr, align="edge", color="gray")
+    if highlight_indices:
+        for idx in highlight_indices:
+            bar_rects[idx].set_color("red")
+    ax.set_xlim(0, len(arr))
+    ax.set_ylim(0, int(max(arr)) + 1)
+    ax.axis("off")
+    st.pyplot(fig)
+    if delay > 0:
+        time.sleep(delay)
 
-# Folium 지도 초기화 (중앙 위치를 프랑스로 설정)
-m = folium.Map(location=[46.6034, 1.8883], zoom_start=6)
 
-# 마커 추가
-for dest in destinations:
-    folium.Marker(
-        location=[dest["lat"], dest["lon"]],
-        popup=f"<b>{dest['name']}</b><br>{dest['description']}",
-        tooltip=dest["name"]
-    ).add_to(m)
+def visualize_sort(arr, generator, delay=0.2):
+    fig, ax = plt.subplots()
+    bar_rects = ax.bar(range(len(arr)), arr, align="edge", color="gray")
+    ax.set_xlim(0, len(arr))
+    ax.set_ylim(0, int(max(arr)) + 1)
+    ax.axis("off")
+    placeholder = st.empty()
 
-# 지도 출력
-st_folium(m, width=700)
+    for array_state, highlight_indices in generator:
+        for idx, rect in enumerate(bar_rects):
+            rect.set_height(array_state[idx])
+            rect.set_color("red" if idx in highlight_indices else "gray")
+        placeholder.pyplot(fig)
+        time.sleep(delay)
 
-# 선택된 도시 정보 제공
-st.subheader("🗼 여행지 설명")
-selected = st.selectbox("여행지를 선택하세요:", [d["name"] for d in destinations])
-for d in destinations:
-    if d["name"] == selected:
-        st.markdown(f"**{d['name']}**")
-        st.write(d["description"])
+
+# ----------- 정렬 알고리즘 -----------
+def bubble_sort(arr):
+    a = arr.copy()
+    for i in range(len(a)):
+        for j in range(len(a) - i - 1):
+            if a[j] > a[j + 1]:
+                a[j], a[j + 1] = a[j + 1], a[j]
+                yield a.copy(), (j, j + 1)
+
+
+def selection_sort(arr):
+    a = arr.copy()
+    for i in range(len(a)):
+        min_idx = i
+        for j in range(i + 1, len(a)):
+            if a[j] < a[min_idx]:
+                min_idx = j
+        a[i], a[min_idx] = a[min_idx], a[i]
+        yield a.copy(), (i, min_idx)
+
+
+def insertion_sort(arr):
+    a = arr.copy()
+    for i in range(1, len(a)):
+        key = a[i]
+        j = i - 1
+        while j >= 0 and key < a[j]:
+            a[j + 1] = a[j]
+            j -= 1
+            yield a.copy(), (j + 1, j + 2)
+        a[j + 1] = key
+        yield a.copy(), (j + 1, i)
+
+
+def quick_sort(arr):
+    a = arr.copy()
+    stack = [(0, len(a) - 1)]
+    while stack:
+        low, high = stack.pop()
+        if low < high:
+            pivot_idx = random.randint(low, high)
+            a[pivot_idx], a[high] = a[high], a[pivot_idx]
+            yield a.copy(), (pivot_idx, high)
+            pivot = a[high]
+            i = low
+            for j in range(low, high):
+                if a[j] < pivot:
+                    a[i], a[j] = a[j], a[i]
+                    yield a.copy(), (i, j)
+                    i += 1
+            a[i], a[high] = a[high], a[i]
+            yield a.copy(), (i, high)
+            stack.extend([(low, i - 1), (i + 1, high)])
+
+
+# ----------- Streamlit UI -----------
+st.title("🔁 정렬 알고리즘 시각화")
+st.markdown(
+    "배열의 크기를 바꾸면 그래프가 즉시 렌더링되며, 정렬은 '정렬 시작' 버튼을 눌러야 수행됩니다."
+)
+
+# session_state 초기화
+if "prev_size" not in st.session_state:
+    st.session_state.prev_size = None
+if "array" not in st.session_state:
+    st.session_state.array = []
+
+# 입력 요소
+sort_type = st.selectbox(
+    "정렬 방식 선택", ["버블 정렬", "선택 정렬", "삽입 정렬", "퀵 정렬"]
+)
+size = st.slider("배열 크기", 5, 30, 15)
+speed = st.slider("속도 (초)", 0.01, 1.0, 0.2)
+
+# 정렬 시작 버튼
+if st.button("정렬 시작"):
+    st.empty()
+    arr = st.session_state.array.copy()
+    if sort_type == "버블 정렬":
+        visualize_sort(arr, bubble_sort(arr), delay=speed)
+    elif sort_type == "선택 정렬":
+        visualize_sort(arr, selection_sort(arr), delay=speed)
+    elif sort_type == "삽입 정렬":
+        visualize_sort(arr, insertion_sort(arr), delay=speed)
+    elif sort_type == "퀵 정렬":
+        visualize_sort(arr, quick_sort(arr), delay=speed)
+
+if st.button("배열 섞기") or size != st.session_state.prev_size:
+    arr = list(range(1, size + 1))
+    np.random.shuffle(arr)
+    st.session_state.array = arr
+    st.session_state.prev_size = size
+    render_array(arr)
+else:
+    if st.session_state.array:
+        render_array(st.session_state.array)
